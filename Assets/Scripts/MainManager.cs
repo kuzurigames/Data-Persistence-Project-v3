@@ -2,155 +2,85 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using System.IO;
 
 public class MainManager : MonoBehaviour
 {
-    public Brick BrickPrefab;
-    public int LineCount = 6;
-    public Rigidbody Ball;
+    public static MainManager Instance;
 
-    public Text ScoreText;
+    //VARIABLES FOR CURRENT SESSION
+    public string playerName;
+    public int currentScore;
 
-    //Fields for display the player info
-    public Text CurrentPlayerName;
-    public Text BestPlayerName;
-
-    public GameObject GameOverText;
-
-    private bool m_Started = false;
-    private int m_Points;
-
-    private bool m_GameOver = false;
-
-    //Static variables for holding the best player data
-    private static int BestScore;
-    private static string BestPlayer;
-
+    //VARIABLES FOR HIGH SCORE SESSION
+    //You have to specify this two so that compiler doesn't get angry and other scripts can read them
+    public int highScore;
+    public string highScoreName;
 
     private void Awake()
     {
-        LoadGameRank();
-    }
-    // Start is called before the first frame update
-    void Start()
-    {
-        const float step = 0.6f;
-        int perLine = Mathf.FloorToInt(4.0f / step);
-
-        int[] pointCountArray = new[] { 1, 1, 2, 2, 5, 5 };
-        for (int i = 0; i < LineCount; ++i)
+        //if there are 2 MainManagers in scene, destroy this MainManager
+        //Happens when the other scene you moved to tries to creates its own MainManager 
+        if (Instance != null)
         {
-            for (int x = 0; x < perLine; ++x)
-            {
-                Vector3 position = new Vector3(-1.5f + step * x, 2.5f + i * 0.3f, 0);
-                var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
-                brick.PointValue = pointCountArray[i];
-                brick.onDestroyed.AddListener(AddPoint);
-            }
+            Destroy(gameObject);
+            return;
         }
 
-        CurrentPlayerName.text = PlayerDataHandle.Instance.PlayerName;
+        //But if this is the only one, don't destroy it
+        Instance = this;
 
-        SetBestPlayer();
+        DontDestroyOnLoad(gameObject);
+
+        LoadHighScore();
+        //Do this, or the code wouldn't know a high score even exists in MainManager
     }
 
-    private void Update()
+    //LOAD GAME SCENE
+    public void StartGame()
     {
-        if (!m_Started)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
-                Vector3 forceDir = new Vector3(randomDirection, 1, 0);
-                forceDir.Normalize();
-
-                Ball.transform.SetParent(null);
-                Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
-            }
-        }
-        else if (m_GameOver)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
-        }
+        SceneManager.LoadScene(1);
+        //ensure your scnees are numbered right in File > Build Settings
     }
 
-    void AddPoint(int point)
+    //DATA PERSISTANCE ACROSS SCENES PART
+    [System.Serializable]
+    public class SaveData
     {
-        m_Points += point;
-        PlayerDataHandle.Instance.Score = m_Points;
-        ScoreText.text = $"Score : {m_Points}";
-    }
-
-    public void GameOver()
-    {
-        m_GameOver = true;
-        CheckBestPlayer();
-        GameOverText.SetActive(true);
-    }
-
-    private void CheckBestPlayer()
-    {
-        int CurrentScore = PlayerDataHandle.Instance.Score;
-
-        if (CurrentScore > BestScore)
-        {
-            BestPlayer = PlayerDataHandle.Instance.PlayerName;
-            BestScore = CurrentScore;
-
-            BestPlayerName.text = $"Best Score - {BestPlayer}: {BestScore}";
-
-            SaveGameRank(BestPlayer, BestScore);
-        }
-    }
-
-    private void SetBestPlayer()
-    {
-        if (BestPlayer == null && BestScore == 0)
-        {
-            BestPlayerName.text = "";
-        }
-        else
-        {
-            BestPlayerName.text = $"Best Score - {BestPlayer}: {BestScore}";
-        }
+        public int highScore;
+        public string highScoreName;
 
     }
 
-    public void SaveGameRank(string bestPlaterName, int bestPlayerScore)
+    //This looks different from the tutorial as we need to capture two arguments
+    public void SaveHighScore(int currentScore, string playerName)
     {
+        //First, create a new instance of the save data 
         SaveData data = new SaveData();
 
-        data.TheBestPlayer = bestPlaterName;
-        data.HighiestScore = bestPlayerScore;
+        //Then specify what you want to store
+        data.highScore = currentScore;
+        data.highScoreName = playerName;
 
+        //Next, transform that instance to JSON with JsonUtility.ToJson: 
         string json = JsonUtility.ToJson(data);
+
+        //Finally, use the special method File.WriteAllText to write a string to a file
         File.WriteAllText(Application.persistentDataPath + "/savefile.json", json);
     }
 
-    public void LoadGameRank()
+
+    public void LoadHighScore()
     {
         string path = Application.persistentDataPath + "/savefile.json";
-
         if (File.Exists(path))
         {
             string json = File.ReadAllText(path);
             SaveData data = JsonUtility.FromJson<SaveData>(json);
 
-            BestPlayer = data.TheBestPlayer;
-            BestScore = data.HighiestScore;
+            highScore = data.highScore;
+            highScoreName = data.highScoreName;
         }
     }
 
-    [System.Serializable]
-    class SaveData
-    {
-        public int HighiestScore;
-        public string TheBestPlayer;
-    }
 }
